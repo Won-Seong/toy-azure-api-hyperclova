@@ -1,51 +1,67 @@
-name: Trigger auto deployment for simple-hyperclova
+name: Build and Deploy to Azure Container Apps
 
-# When this action will be executed
 on:
-  # Automatically trigger it when detected changes in repo
   push:
-    branches: 
-      [ main ]
-    paths:
-    - '**'
-    - '.github/workflows/simple-hyperclova-AutoDeployTrigger-a80a837f-7ed0-45a0-9f40-66bbc9fa3237.yml'
+    branches: [ "main" ]
+  workflow_dispatch:
 
-  # Allow manual trigger 
-  workflow_dispatch:      
+env:
+  CONTAINER_APP_NAME: "simple-hyperclova"
+  RESOURCE_GROUP: "ldcc"
 
 jobs:
-  build-and-deploy:
+  build-and-push:
     runs-on: ubuntu-latest
-    permissions: 
-      id-token: write #This is required for requesting the OIDC JWT Token
-      contents: read #Required when GH token is used to authenticate with private repo
+    permissions:
+      contents: read
+      packages: write
 
     steps:
-      - name: Checkout to the branch
-        uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Azure Login
-        uses: azure/login@v2
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
         with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          # 이미지 태그: ghcr.io/내아이디/저장소이름:latest (모두 소문자로 변환됨)
+          tags: ghcr.io/${{ github.repository }}:latest
+
+  deploy-to-azure:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          # 아까 등록한 특급 출입증(JSON)을 사용합니다.
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-          client-id: ${{ secrets.SIMPLEHYPERCLOVA_AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.SIMPLEHYPERCLOVA_AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.SIMPLEHYPERCLOVA_AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build and push container image to registry
-        uses: azure/container-apps-deploy-action@v2
+      - name: Deploy to Azure Container Apps
+        # Azure CLI를 직접 사용하여 배포 (가장 확실한 방법)
+        uses: azure/CLI@v1
         with:
-          appSourcePath: ${{ github.workspace }}
-          _dockerfilePathKey_: _dockerfilePath_
-          _targetLabelKey_: _targetLabel_
-          registryUrl: ghcr.io
-          registryUsername: ${{ secrets.SIMPLEHYPERCLOVA_REGISTRY_USERNAME }}
-          registryPassword: ${{ secrets.SIMPLEHYPERCLOVA_REGISTRY_PASSWORD }}
-          containerAppName: simple-hyperclova
-          resourceGroup: ldcc
-          imageToBuild: ghcr.io/simple-hyperclova:${{ github.sha }}
-          _buildArgumentsKey_: |
-            _buildArgumentsValues_
+          inlineScript: |
+            # 1. 레지스트리 설정 (GHCR을 쓸 수 있게 설정)
+            az containerapp registry set \
+              --name ${{ env.CONTAINER_APP_NAME }} \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --server ghcr.io \
+              --username ${{ github.actor }} \
+              --password ${{ secrets.GITHUB_TOKEN }}
 
-
-
+            # 2. 이미지 업데이트 (배포)
+            az containerapp update \
+              --name ${{ env.CONTAINER_APP_NAME }} \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --image ghcr.io/${{ github.repository }}:latest \
+              --cpu 1.0 --memory 2.0Gi
