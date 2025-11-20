@@ -15,5 +15,6 @@ def read_root():
 
 @app.post("/generate")
 def generate_text(user_input: UserInput):
-    output = pipe(user_input.text, max_length=100, do_sample=True)
+    print("Processing...")
+    output = pipe(user_input.text, max_new_tokens=64, do_sample=True)
     return {"result": output[0]['generated_text']}
