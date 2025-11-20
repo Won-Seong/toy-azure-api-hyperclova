@@ -49,6 +49,7 @@ jobs:
         uses: azure/CLI@v1
         with:
           inlineScript: |
+            echo "1. 레지스트리 설정 중..."
             az containerapp registry set \
               --name ${{ env.CONTAINER_APP_NAME }} \
               --resource-group ${{ env.RESOURCE_GROUP }} \
@@ -56,10 +57,10 @@ jobs:
               --username ${{ github.actor }} \
               --password ${{ secrets.GITHUB_TOKEN }}
 
+            echo "2. 배포(업데이트) 시작..."
             az containerapp update \
               --name ${{ env.CONTAINER_APP_NAME }} \
               --resource-group ${{ env.RESOURCE_GROUP }} \
-              # ▼▼▼ [수정 2] 여기도 똑같이 소문자로! ▼▼▼
               --image ghcr.io/won-seong/toy-azure-api-hyperclova:latest \
               --target-port 8000 \
               --ingress external \
