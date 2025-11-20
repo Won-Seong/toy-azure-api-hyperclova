@@ -1,4 +1,4 @@
-name: Build and Deploy to Azure Container Apps
+name: Manual Deploy to Azure Container Apps
 
 on:
   push:
@@ -6,10 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  # ▼▼▼ [수정할 곳 1] Azure Container App 이름 ▼▼▼
   CONTAINER_APP_NAME: "simple-hyperclova"
-  
-  # ▼▼▼ [수정할 곳 2] Azure 리소스 그룹 이름 ▼▼▼
   RESOURCE_GROUP: "ldcc"
 
 jobs:
@@ -35,8 +32,8 @@ jobs:
         with:
           context: .
           push: true
-          # 이미지 태그: ghcr.io/내아이디/저장소이름:latest (모두 소문자로 변환됨)
-          tags: ghcr.io/${{ github.repository }}:latest
+          # ▼▼▼ [수정 1] 변수 대신 소문자로 직접 입력! ▼▼▼
+          tags: ghcr.io/won-seong/toy-azure-api-hyperclova:latest
 
   deploy-to-azure:
     needs: build-and-push
@@ -46,15 +43,12 @@ jobs:
       - name: Log in to Azure
         uses: azure/login@v1
         with:
-          # 아까 등록한 특급 출입증(JSON)을 사용합니다.
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Deploy to Azure Container Apps
-        # Azure CLI를 직접 사용하여 배포 (가장 확실한 방법)
         uses: azure/CLI@v1
         with:
           inlineScript: |
-            # 1. 레지스트리 설정 (GHCR을 쓸 수 있게 설정)
             az containerapp registry set \
               --name ${{ env.CONTAINER_APP_NAME }} \
               --resource-group ${{ env.RESOURCE_GROUP }} \
@@ -62,9 +56,11 @@ jobs:
               --username ${{ github.actor }} \
               --password ${{ secrets.GITHUB_TOKEN }}
 
-            # 2. 이미지 업데이트 (배포)
             az containerapp update \
               --name ${{ env.CONTAINER_APP_NAME }} \
               --resource-group ${{ env.RESOURCE_GROUP }} \
-              --image ghcr.io/${{ github.repository }}:latest \
+              # ▼▼▼ [수정 2] 여기도 똑같이 소문자로! ▼▼▼
+              --image ghcr.io/won-seong/toy-azure-api-hyperclova:latest \
+              --target-port 8000 \
+              --ingress external \
               --cpu 1.0 --memory 2.0Gi
