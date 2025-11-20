@@ -49,7 +49,7 @@ jobs:
         uses: azure/CLI@v1
         with:
           inlineScript: |
-            echo "1. 레지스트리 설정 중..."
+            echo "1. 레지스트리(GHCR) 권한 설정"
             az containerapp registry set \
               --name ${{ env.CONTAINER_APP_NAME }} \
               --resource-group ${{ env.RESOURCE_GROUP }} \
@@ -57,11 +57,18 @@ jobs:
               --username ${{ github.actor }} \
               --password ${{ secrets.GITHUB_TOKEN }}
 
-            echo "2. 배포(업데이트) 시작..."
+            echo "2. 포트(8000) 및 외부 접속 설정 (Ingress)"
+            # update 명령어에서 에러가 나서, 전용 명령어로 따로 뺍니다.
+            az containerapp ingress enable \
+              --name ${{ env.CONTAINER_APP_NAME }} \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --target-port 8000 \
+              --type external
+
+            echo "3. 이미지 업데이트 (배포)"
+            # 여기서 에러나던 옵션들을 다 뺐습니다. 오직 이미지만 갈아끼웁니다.
             az containerapp update \
               --name ${{ env.CONTAINER_APP_NAME }} \
               --resource-group ${{ env.RESOURCE_GROUP }} \
               --image ghcr.io/won-seong/toy-azure-api-hyperclova:latest \
-              --target-port 8000 \
-              --ingress external \
               --cpu 1.0 --memory 2.0Gi
